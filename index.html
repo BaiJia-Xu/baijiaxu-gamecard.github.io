@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>羽球趣味賽卡牌設計器 - PTCG 精準印刷版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" crossorigin="anonymous">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                    },
+                    colors: {
+                        ptcgGold: '#d4af37',
+                        ptcgDark: '#1e1e24',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        /* Fixed-size PTCG card dimensions for 1:1 screen & PNG export fidelity */
+        .ptcg-card-box {
+            width: 330px;
+            height: 475px;
+            box-sizing: border-box;
+            border-radius: 18px;
+            position: relative;
+            overflow: hidden;
+            user-select: none;
+            flex-shrink: 0;
+            font-family: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+        }
+
+        /* Holographic Holo Foil Effect */
+        .card-holo {
+            position: relative;
+        }
+        .card-holo::after {
+            content: "";
+            position: absolute;
+            top: -100%;
+            left: -100%;
+            width: 300%;
+            height: 300%;
+            background: linear-gradient(
+                115deg,
+                transparent 20%,
+                rgba(255, 255, 255, 0.22) 30%,
+                rgba(255, 0, 128, 0.12) 40%,
+                rgba(0, 255, 255, 0.15) 50%,
+                rgba(255, 230, 0, 0.18) 60%,
+                transparent 70%
+            );
+            pointer-events: none;
+            transition: transform 0.5s ease;
+            opacity: 0.7;
+            mix-blend-mode: color-dodge;
+            z-index: 20;
+        }
+        .ptcg-card-box:hover .card-holo::after {
+            transform: translate(15%, 15%);
+        }
+
+        /* Safe text wrapper to prevent baseline shifts and off-screen rendering */
+        .card-text-safe {
+            line-height: 1.35;
+            display: inline-block;
+            vertical-align: middle;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Standard PTCG Card Golden/Rainbow/Debuff Borders */
+        .ptcg-border-item {
+            background: linear-gradient(135deg, #e2e8f0 0%, #93c5fd 35%, #3b82f6 70%, #1e40af 100%);
+            box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
+        }
+        .ptcg-border-debuff {
+            background: linear-gradient(135deg, #f3e8ff 0%, #c084fc 35%, #8b5cf6 70%, #581c87 100%);
+            box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.4);
+        }
+        .ptcg-border-gold {
+            background: linear-gradient(135deg, #fef08a 0%, #eab308 35%, #ca8a04 70%, #854d0e 100%);
+            box-shadow: 0 10px 25px -5px rgba(234, 179, 8, 0.4);
+        }
+
+        /* Printable setup */
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-grid {
+                display: grid !important;
+                grid-template-columns: repeat(2, 330px) !important;
+                gap: 15mm !important;
+                justify-content: center;
+                padding: 10mm !important;
+            }
+            .ptcg-card-box {
+                break-inside: avoid;
+                page-break-inside: avoid;
+                box-shadow: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="no-print bg-slate-900/90 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-yellow-500 via-amber-400 to-amber-200 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg">
+                    <i class="fa-solid fa-shuttlecock"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight text-white flex items-center gap-2">
+                        羽球趣味賽卡牌工作室 <span class="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono">PTCG 完美下載版</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">改善下載圖片位移與裁切問題，可自由編輯與印製高質感卡牌</p>
+                </div>
+            </div>
+
+            <!-- Header Actions -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <button onclick="addNewCard()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-lg border border-slate-700 transition flex items-center gap-2">
+                    <i class="fa-solid fa-plus text-amber-400"></i> 新增自訂卡牌
+                </button>
+                <button onclick="triggerRandomDraw()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg shadow transition flex items-center gap-2">
+                    <i class="fa-solid fa-dice"></i> 隨機抽限制卡
+                </button>
+                <button onclick="toggleHoloEffect()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg shadow transition flex items-center gap-2">
+                    <i class="fa-solid fa-sparkles"></i> <span id="holoToggleText">切換閃卡特效</span>
+                </button>
+                <button onclick="window.print()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg shadow transition flex items-center gap-2">
+                    <i class="fa-solid fa-print"></i> 列印卡牌 (A4)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- LEFT/TOP: Filter & Card Display Container (7-8 cols) -->
+        <section class="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
+            <!-- Filter Bar -->
+            <div class="no-print bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">篩選：</span>
+                    <button onclick="filterCards('all')" id="btn-filter-all" class="filter-btn px-3 py-1 text-xs rounded-lg font-medium bg-amber-500 text-slate-950 font-bold">全部 (<span id="count-all">8</span>)</button>
+                    <button onclick="filterCards('item')" id="btn-filter-item" class="filter-btn px-3 py-1 text-xs rounded-lg font-medium bg-slate-700 text-slate-300 hover:bg-slate-600">道具卡 (<span id="count-item">4</span>)</button>
+                    <button onclick="filterCards('debuff')" id="btn-filter-debuff" class="filter-btn px-3 py-1 text-xs rounded-lg font-medium bg-slate-700 text-slate-300 hover:bg-slate-600">限制卡 (<span id="count-debuff">4</span>)</button>
+                </div>
+                <div class="text-xs text-slate-400 flex items-center gap-1">
+                    <i class="fa-solid fa-circle-check text-emerald-400"></i> 已修復：下載圖檔與螢幕呈現 100% 一致
+                </div>
+            </div>
+
+            <!-- Printable & Viewable Grid -->
+            <div id="cardsDisplayGrid" class="print-grid flex flex-wrap gap-6 justify-center md:justify-start">
+                <!-- Dynamic Cards inserted here -->
+            </div>
+        </section>
+
+        <!-- RIGHT: Card Live Editor Drawer (4-5 cols) -->
+        <section class="lg:col-span-5 xl:col-span-4 no-print">
+            <div class="sticky top-20 bg-slate-800/90 rounded-2xl border border-slate-700/80 p-5 shadow-2xl backdrop-blur-md">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-3 mb-4">
+                    <h2 class="font-bold text-slate-100 flex items-center gap-2">
+                        <i class="fa-solid fa-pen-to-square text-amber-400"></i> 卡面即時編輯器
+                    </h2>
+                    <span id="editingCardTag" class="text-xs bg-slate-700 text-amber-300 font-mono px-2 py-0.5 rounded">選擇卡片中</span>
+                </div>
+
+                <form id="editorForm" onsubmit="event.preventDefault();" class="space-y-4 max-h-[calc(100vh-180px)] overflow-y-auto pr-1">
+                    <input type="hidden" id="edit-id">
+
+                    <!-- Basic Properties -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-slate-400 font-medium mb-1">卡牌類型</label>
+                            <select id="edit-type" onchange="updateCurrentCardFromForm()" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                                <option value="item">道具卡 (Item)</option>
+                                <option value="debuff">限制卡 (Debuff)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 font-medium mb-1">外框風格</label>
+                            <select id="edit-borderStyle" onchange="updateCurrentCardFromForm()" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                                <option value="ptcg-border-item">藍色銀邊 (經典道具)</option>
+                                <option value="ptcg-border-debuff">紫色暗邊 (詛咒限制)</option>
+                                <option value="ptcg-border-gold">黃金金卡 (極稀有)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Title & Header Limit -->
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="col-span-2">
+                            <label class="block text-xs text-slate-400 font-medium mb-1">卡牌名稱 (【】內文字)</label>
+                            <input type="text" id="edit-title" oninput="updateCurrentCardFromForm()" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 font-medium mb-1">角標標籤</label>
+                            <input type="text" id="edit-limitTag" oninput="updateCurrentCardFromForm()" placeholder="每局1次" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Artwork Section -->
+                    <div>
+                        <label class="block text-xs text-slate-400 font-medium mb-1">卡面圖案 / 圖示 (FontAwesome 類別或圖片)</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="edit-iconClass" oninput="updateCurrentCardFromForm()" placeholder="fa-solid fa-people-group" class="flex-1 bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none font-mono">
+                            <label class="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-lg border border-slate-600 cursor-pointer flex items-center justify-center text-slate-200">
+                                <span>上傳圖片</span>
+                                <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Subhead Line -->
+                    <div>
+                        <label class="block text-xs text-slate-400 font-medium mb-1">圖案下說明細項條 (Sub-header Bar)</label>
+                        <input type="text" id="edit-subInfo" oninput="updateCurrentCardFromForm()" placeholder="羽球道具組 No.001 • 戰術支援" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                    </div>
+
+                    <!-- Ability Section -->
+                    <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-700/50 space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-slate-400 font-medium mb-1">技能徽章 (如: 特性/限制)</label>
+                                <input type="text" id="edit-abilityBadge" oninput="updateCurrentCardFromForm()" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 font-medium mb-1">技能名稱</label>
+                                <input type="text" id="edit-abilityName" oninput="updateCurrentCardFromForm()" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 font-medium mb-1">技能效果詳細描述</label>
+                            <textarea id="edit-description" rows="3" oninput="updateCurrentCardFromForm()" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none leading-relaxed"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Bar -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-slate-400 font-medium mb-1">持續時間 / 時效標示</label>
+                            <input type="text" id="edit-duration" oninput="updateCurrentCardFromForm()" placeholder="持續 2 球" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 font-medium mb-1">卡號標記</label>
+                            <input type="text" id="edit-cardNumber" oninput="updateCurrentCardFromForm()" placeholder="NO.001/008 ★" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none font-mono">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-400 font-medium mb-1">卡底趣味風趣語 (Flavor Text)</label>
+                        <input type="text" id="edit-flavor" oninput="updateCurrentCardFromForm()" placeholder="「場外也是戰場的一部分...」" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-lg px-2.5 py-1.5 text-white focus:ring-2 focus:ring-amber-500 outline-none italic">
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="pt-2 flex gap-2">
+                        <button onclick="exportCurrentCardPNG()" class="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg">
+                            <i class="fa-solid fa-download"></i> 下載此卡片 (高清 PNG)
+                        </button>
+                        <button onclick="duplicateCard()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm rounded-xl transition" title="複製卡牌">
+                            <i class="fa-solid fa-copy"></i>
+                        </button>
+                        <button onclick="deleteCurrentCard()" class="px-3 py-2 bg-rose-900/60 hover:bg-rose-800 text-rose-200 font-medium text-sm rounded-xl border border-rose-700/50 transition" title="刪除卡牌">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <!-- Random Draw Modal -->
+    <div id="drawModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-purple-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl text-center space-y-6 transform transition-all scale-95 opacity-0" id="drawModalContent">
+            <div class="space-y-1">
+                <span class="text-xs font-bold uppercase tracking-widest text-purple-400">Random Restriction Draw</span>
+                <h3 class="text-2xl font-black text-white">本局抽中限制卡！</h3>
+            </div>
+
+            <!-- Card Container for Draw Slot -->
+            <div id="drawnCardContainer" class="flex justify-center my-4 overflow-hidden py-2">
+                <!-- Drawn Card rendered here -->
+            </div>
+
+            <div class="flex gap-3 justify-center">
+                <button onclick="triggerRandomDraw()" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition flex items-center gap-2">
+                    <i class="fa-solid fa-rotate"></i> 再抽一次
+                </button>
+                <button onclick="closeDrawModal()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition">
+                    確定關閉
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-amber-500 text-slate-950 px-4 py-3 rounded-xl font-bold shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2">
+        <i class="fa-solid fa-check-circle"></i> <span id="toastMsg">提示訊息</span>
+    </div>
+
+    <script>
+        // Data structure representing PTCG style cards
+        let cardDataList = [
+            // --- 道具卡 (Item Cards) ---
+            {
+                id: 'item-1',
+                type: 'item',
+                borderStyle: 'ptcg-border-item',
+                badgeText: '道具卡 ITEM',
+                badgeBg: 'bg-blue-600 text-white',
+                limitTag: '每局1次',
+                title: '天降神兵',
+                iconClass: 'fa-solid fa-people-group',
+                iconBg: 'from-blue-600 via-sky-500 to-indigo-700',
+                imageUrl: '',
+                subInfo: '羽球道具組 No.001 • 戰術支援 • 發動: 己方回合',
+                abilityBadge: '特性',
+                abilityBadgeBg: 'bg-red-600 text-white',
+                abilityName: '場外奇襲',
+                description: '可召喚場外一位干擾組成員持拍進場，形成短暫的 3v2 局勢（持續 2 球）。',
+                duration: '持續 2 球',
+                cardNumber: 'NO.001/008 ★',
+                flavor: '「人多就是力量！連裁判都沒料到的戰術支援。」',
+                bgGradient: 'bg-gradient-to-b from-blue-50 via-sky-50 to-slate-100',
+            },
+            {
+                id: 'item-2',
+                type: 'item',
+                borderStyle: 'ptcg-border-item',
+                badgeText: '道具卡 ITEM',
+                badgeBg: 'bg-blue-600 text-white',
+                limitTag: '每局1次',
+                title: '盾牌張開',
+                iconClass: 'fa-solid fa-shield-halved',
+                iconBg: 'from-sky-500 via-teal-500 to-emerald-600',
+                imageUrl: '',
+                subInfo: '羽球道具組 No.002 • 防禦干擾 • 發動: 對方發球時',
+                abilityBadge: '特性',
+                abilityBadgeBg: 'bg-red-600 text-white',
+                abilityName: '反向發球姿態',
+                description: '對方獲得發球權時使用，對方該次發球必須採用「非慣用手」發球。',
+                duration: '單次發球生效',
+                cardNumber: 'NO.002/008 ★',
+                flavor: '「換一隻手發球，難度直接乘上十倍！」',
+                bgGradient: 'bg-gradient-to-b from-teal-50 via-sky-50 to-slate-100',
+            },
+            {
+                id: 'item-3',
+                type: 'item',
+                borderStyle: 'ptcg-border-item',
+                badgeText: '道具卡 ITEM',
+                badgeBg: 'bg-blue-600 text-white',
+                limitTag: '每局1次',
+                title: '換球大師',
+                iconClass: 'fa-solid fa-bowling-ball',
+                iconBg: 'from-amber-500 via-orange-500 to-red-600',
+                imageUrl: '',
+                subInfo: '羽球道具組 No.003 • 道具變更 • 發動: 任意準備時間',
+                abilityBadge: '特性',
+                abilityBadgeBg: 'bg-red-600 text-white',
+                abilityName: '異質羽球登場',
+                description: '強制將比賽用羽球更換為「巨型羽球」或「汽球」（持續 3 球）。',
+                duration: '持續 3 球',
+                cardNumber: 'NO.003/008 ★',
+                flavor: '「氣球受空氣飄移影響，考驗你的極限預判力。」',
+                bgGradient: 'bg-gradient-to-b from-amber-50 via-orange-50 to-slate-100',
+            },
+            {
+                id: 'item-4',
+                type: 'item',
+                borderStyle: 'ptcg-border-gold',
+                badgeText: '特別道具 ITEM',
+                badgeBg: 'bg-amber-600 text-white',
+                limitTag: '每局1次',
+                title: '雙倍得分',
+                iconClass: 'fa-solid fa-gem',
+                iconBg: 'from-yellow-400 via-amber-500 to-amber-700',
+                imageUrl: '',
+                subInfo: '羽球道具組 No.004 • 高風險豪賭 • 發動: 發球前宣告',
+                abilityBadge: '特性',
+                abilityBadgeBg: 'bg-red-600 text-white',
+                abilityName: '雙倍賭局',
+                description: '宣告後，下一球若己方得分可直接算 2 分（若輸球則對方得 2 分）。',
+                duration: '下一球生效',
+                cardNumber: 'NO.004/008 ★★★',
+                flavor: '「大好或大壞！這一球，翻轉整場局勢！」',
+                bgGradient: 'bg-gradient-to-b from-amber-100/80 via-yellow-50 to-slate-100',
+            },
+
+            // --- 限制卡 (Debuff Cards) ---
+            {
+                id: 'debuff-1',
+                type: 'debuff',
+                borderStyle: 'ptcg-border-debuff',
+                badgeText: '限制卡 DEBUFF',
+                badgeBg: 'bg-purple-700 text-white',
+                limitTag: '隨機抽取',
+                title: '沉默之金',
+                iconClass: 'fa-solid fa-volume-xmark',
+                iconBg: 'from-purple-700 via-indigo-800 to-slate-900',
+                imageUrl: '',
+                subInfo: '羽球限制組 No.005 • 全隊約束 • 效力: 整局生效',
+                abilityBadge: '限制規則',
+                abilityBadgeBg: 'bg-purple-800 text-white',
+                abilityName: '靜音戰場',
+                description: '全隊在該局過程中不可發出聲音，只要發出叫聲或說話，直接送對方 1 分。',
+                duration: '全局生效',
+                cardNumber: 'NO.005/008 ★',
+                flavor: '「憋笑與不能喊『我的』是這局最大的考驗。」',
+                bgGradient: 'bg-gradient-to-b from-purple-50 via-slate-100 to-purple-100/50',
+            },
+            {
+                id: 'debuff-2',
+                type: 'debuff',
+                borderStyle: 'ptcg-border-debuff',
+                badgeText: '限制卡 DEBUFF',
+                badgeBg: 'bg-purple-700 text-white',
+                limitTag: '隨機抽取',
+                title: '連體嬰',
+                iconClass: 'fa-solid fa-link',
+                iconBg: 'from-fuchsia-600 via-pink-700 to-purple-900',
+                imageUrl: '',
+                subInfo: '羽球限制組 No.006 • 站位束縛 • 效力: 整局生效',
+                abilityBadge: '限制規則',
+                abilityBadgeBg: 'bg-purple-800 text-white',
+                abilityName: '彈性牽絆',
+                description: '隊友兩人中間必須用彈性繩綁住手腕，彼此距離不能超過 1 公尺。',
+                duration: '全局生效',
+                cardNumber: 'NO.006/008 ★',
+                flavor: '「兩人的默契拉滿！跑錯方向直接一起摔倒。」',
+                bgGradient: 'bg-gradient-to-b from-fuchsia-50 via-purple-50 to-slate-100',
+            },
+            {
+                id: 'debuff-3',
+                type: 'debuff',
+                borderStyle: 'ptcg-border-debuff',
+                badgeText: '限制卡 DEBUFF',
+                badgeBg: 'bg-purple-700 text-white',
+                limitTag: '隨機抽取',
+                title: '迷你羽球拍',
+                iconClass: 'fa-solid fa-table-tennis-paddle-ball',
+                iconBg: 'from-rose-600 via-pink-600 to-purple-800',
+                imageUrl: '',
+                subInfo: '羽球限制組 No.007 • 球拍限制 • 效力: 指定單人整局',
+                abilityBadge: '限制規則',
+                abilityBadgeBg: 'bg-purple-800 text-white',
+                abilityName: '甜區縮小術',
+                description: '指定對方其中一人，該局必須換成迷你童拍或桌球拍打球。',
+                duration: '全局生效',
+                cardNumber: 'NO.007/008 ★',
+                flavor: '「用桌球拍打羽球？考驗你極致的精準手感！」',
+                bgGradient: 'bg-gradient-to-b from-rose-50 via-purple-50 to-slate-100',
+            },
+            {
+                id: 'debuff-4',
+                type: 'debuff',
+                borderStyle: 'ptcg-border-debuff',
+                badgeText: '限制卡 DEBUFF',
+                badgeBg: 'bg-purple-700 text-white',
+                limitTag: '隨機抽取',
+                title: '霸王坐騎',
+                iconClass: 'fa-solid fa-chair',
+                iconBg: 'from-violet-700 via-purple-800 to-slate-900',
+                imageUrl: '',
+                subInfo: '羽球限制組 No.008 • 姿態限制 • 效力: 主力選手整局',
+                abilityBadge: '限制規則',
+                abilityBadgeBg: 'bg-purple-800 text-white',
+                abilityName: '板凳大師',
+                description: '隊伍中擊球威力最強者，該局只能坐在塑膠小矮凳上擊球。',
+                duration: '全局生效',
+                cardNumber: 'NO.008/008 ★',
+                flavor: '「就算坐著矮凳，王者依然是王者...吧？」',
+                bgGradient: 'bg-gradient-to-b from-violet-50 via-purple-50 to-slate-100',
+            }
+        ];
+
+        let activeCardId = 'item-1';
+        let currentFilter = 'all';
+        let isHoloActive = true;
+
+        window.onload = function() {
+            renderCards();
+            populateEditorForm(activeCardId);
+        };
+
+        function renderCards() {
+            const grid = document.getElementById('cardsDisplayGrid');
+            grid.innerHTML = '';
+
+            const filteredList = cardDataList.filter(card => {
+                if (currentFilter === 'all') return true;
+                return card.type === currentFilter;
+            });
+
+            document.getElementById('count-all').innerText = cardDataList.length;
+            document.getElementById('count-item').innerText = cardDataList.filter(c => c.type === 'item').length;
+            document.getElementById('count-debuff').innerText = cardDataList.filter(c => c.type === 'debuff').length;
+
+            filteredList.forEach(card => {
+                const isSelected = card.id === activeCardId;
+                const cardWrapper = document.createElement('div');
+                cardWrapper.className = `relative cursor-pointer transition-all duration-200 ${isSelected ? 'ring-4 ring-amber-400 rounded-[20px] scale-[1.01] z-10' : 'hover:scale-[1.01]'}`;
+                cardWrapper.onclick = () => selectCardForEdit(card.id);
+
+                cardWrapper.innerHTML = createCardHTML(card);
+                grid.appendChild(cardWrapper);
+            });
+        }
+
+        // Generate pixel-strict HTML layout for PTCG accuracy and html2canvas perfection
+        function createCardHTML(card) {
+            const holoClass = isHoloActive ? 'card-holo' : '';
+            const artworkSvg = getArtworkIconSvg(card.iconClass);
+
+            return `
+            <div id="card-node-${card.id}" class="ptcg-card-box ${card.borderStyle} ${holoClass} p-[10px] flex flex-col text-slate-900 shadow-2xl relative select-none">
+                
+                <!-- INNER CARD FRAME -->
+                <div class="${card.bgGradient} w-full h-full rounded-[12px] p-[10px] flex flex-col justify-between border border-white/80 relative shadow-inner overflow-hidden">
+                    
+                    <!-- 1. HEADER SECTION -->
+                    <div class="w-full flex items-center justify-between border-b border-slate-300/80 pb-[6px] pt-[2px] gap-1">
+                        <div class="flex items-center gap-[4px] min-w-0 overflow-hidden">
+                            <span class="px-[5px] py-[2.5px] rounded-[4px] text-[10px] font-black tracking-wider uppercase ${card.badgeBg} shadow-sm shrink-0 leading-none whitespace-nowrap">
+                                ${card.badgeText}
+                            </span>
+                            <h3 class="font-black text-slate-900 text-[15px] leading-tight tracking-tight truncate whitespace-nowrap card-text-safe">
+                                【${card.title}】
+                            </h3>
+                        </div>
+                        <div class="flex items-center flex-nowrap whitespace-nowrap gap-[3px] bg-amber-200/90 border border-amber-400/80 px-[6px] py-[2.5px] rounded-full text-[10px] font-bold text-amber-950 shrink-0">
+                            <!-- Clock SVG Icon -->
+                            <svg class="w-3 h-3 fill-amber-950 shrink-0" viewBox="0 0 24 24">
+                                <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8zm.5-13H11v6l5.2 3.1.8-1.3-4.5-2.7z"/>
+                            </svg>
+                            <span class="whitespace-nowrap leading-none">${card.limitTag}</span>
+                        </div>
+                    </div>
+
+                    <!-- 2. ARTWORK WINDOW SECTION -->
+                    <div class="w-full h-[150px] rounded-[8px] border-2 border-slate-400/80 shadow-inner overflow-hidden relative bg-slate-900 flex items-center justify-center my-[4px]">
+                        ${card.imageUrl ? `
+                            <img src="${card.imageUrl}" class="w-full h-full object-cover" alt="${card.title}" />
+                        ` : `
+                            <div class="w-full h-full bg-gradient-to-tr ${card.iconBg} flex flex-col items-center justify-center text-white p-3">
+                                ${artworkSvg}
+                            </div>
+                        `}
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-white/10 pointer-events-none"></div>
+                    </div>
+
+                    <!-- 3. SUB-INFO BAR -->
+                    <div class="w-full py-[3px] px-[6px] bg-amber-100/90 border border-amber-300/80 rounded-[4px] flex items-center justify-center text-[9.5px] text-slate-800 font-bold tracking-tight shadow-sm mb-[4px] truncate whitespace-nowrap leading-tight">
+                        ${card.subInfo}
+                    </div>
+
+                    <!-- 4. ABILITY & EFFECT BOX -->
+                    <div class="w-full h-[125px] bg-white/85 border border-slate-200/90 rounded-[8px] p-[8px] shadow-sm flex flex-col justify-start overflow-hidden">
+                        <div class="flex items-center gap-[6px] mb-[4px]">
+                            <span class="px-[6px] py-[2px] rounded-[4px] text-[10px] font-bold ${card.abilityBadgeBg} shadow-sm shrink-0 leading-normal whitespace-nowrap">
+                                ${card.abilityBadge}
+                            </span>
+                            <span class="font-bold text-slate-900 text-[13.5px] leading-tight truncate card-text-safe">
+                                ${card.abilityName}
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-slate-800 font-medium leading-[1.4] tracking-normal text-justify overflow-hidden card-text-safe">
+                            ${card.description}
+                        </p>
+                    </div>
+
+                    <!-- 5. STATS & FOOTER SECTION -->
+                    <div class="w-full flex flex-col justify-end pt-[2px]">
+                        <!-- Duration & Card Number Pill -->
+                        <div class="w-full py-[2px] flex items-center justify-between text-[10px] font-bold bg-slate-200/90 px-[8px] rounded-[4px] border border-slate-300 text-slate-800 mb-[4px]">
+                            <span class="flex items-center gap-1.5 whitespace-nowrap">
+                                <!-- Stopwatch SVG Icon -->
+                                <svg class="w-3.5 h-3.5 fill-slate-600 shrink-0 inline-block" viewBox="0 0 24 24">
+                                    <path d="M15 1H9v2h6V1zm-2 13h-2V8h2v6zm6.31-5.69l1.42-1.42a8.96 8.96 0 0 0-1.41-1.41l-1.42 1.42A8.933 8.933 0 0 0 12 5c-3.87 0-7 3.13-7 7s3.13 7 7 7 7-3.13 7-7c0-1.93-.78-3.68-2.05-4.96zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+                                </svg>
+                                時效: ${card.duration}
+                            </span>
+                            <span class="font-mono text-slate-600 whitespace-nowrap">${card.cardNumber}</span>
+                        </div>
+
+                        <!-- Flavor Text line with safe line height and zero shift padding -->
+                        <div class="w-full flex items-center justify-between text-[9px] text-slate-600 font-medium border-t border-slate-300/60 pt-[2px] pb-[1px] px-[2px]">
+                            <span class="italic truncate max-w-[210px] card-text-safe">${card.flavor}</span>
+                            <span class="font-bold text-slate-400 shrink-0 card-text-safe">illus. Studio</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            `;
+        }
+
+        // SVG Helper to render inline vector icons for artwork window
+        function getArtworkIconSvg(iconClass) {
+            if (!iconClass) return `<i class="fa-solid fa-sparkles text-[52px] drop-shadow-md"></i>`;
+
+            if (iconClass.includes('people-group')) {
+                return `<svg class="w-14 h-14 fill-white drop-shadow-md" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>`;
+            }
+            if (iconClass.includes('shield')) {
+                return `<svg class="w-14 h-14 fill-white drop-shadow-md" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>`;
+            }
+            if (iconClass.includes('bowling') || iconClass.includes('ball')) {
+                return `<svg class="w-14 h-14 fill-white drop-shadow-md" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="9" cy="9" r="1.5" fill="#333"/><circle cx="15" cy="9" r="1.5" fill="#333"/><circle cx="12" cy="14" r="1.5" fill="#333"/></svg>`;
+            }
+            if (iconClass.includes('gem')) {
+                return `<svg class="w-14 h-14 fill-white drop-shadow-md" viewBox="0 0 24 24"><path d="M16 2H8L4 8l8 14 8-14-4-6zm-3.57 2l2.36 3.5H9.21L11.57 4zM6.43 8l2.35-3.5h.01L6.43 8zM12 18.53L7.12 10h9.76L12 18.53z"/></svg>`;
+            }
+            if (iconClass.includes('volume-xmark') || iconClass.includes('volume')) {
+                return `<svg class="w-14 h-14 fill-white drop-shadow-md" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>`;
+            }
+            if (iconClass.includes('link')) {
+                return `<svg class="w-14 h-14 fill-white drop-shadow-md" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>`;
+            }
+            if (iconClass.includes('paddle') || iconClass.includes('table-tennis')) {
+                return `<svg class="w-14 h-14 fill-white drop-shadow-md" viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path d="M15 15l5 5c.8.8 2 .8 2.8 0 .8-.8.8-2 0-2.8l-5-5-2.8 2.8z"/><circle cx="18" cy="6" r="2"/></svg>`;
+            }
+            if (iconClass.includes('chair')) {
+                return `<svg class="w-14 h-14 fill-white drop-shadow-md" viewBox="0 0 24 24"><path d="M7 11v-5c0-1.1.9-2 2-2h6c1.1 0 2 .9 2 2v5h2c1.1 0 2 .9 2 2v3h-2v5h-2v-5h-10v5h-2v-5h-2v-3c0-1.1.9-2 2-2h2zm2-5v5h6v-5h-6z"/></svg>`;
+            }
+
+            // Fallback fontawesome tag or spark icon
+            return `<i class="${iconClass} text-[52px] drop-shadow-md"></i>`;
+        }
+
+        function selectCardForEdit(id) {
+            activeCardId = id;
+            renderCards();
+            populateEditorForm(id);
+        }
+
+        function populateEditorForm(id) {
+            const card = cardDataList.find(c => c.id === id);
+            if (!card) return;
+
+            document.getElementById('edit-id').value = card.id;
+            document.getElementById('edit-type').value = card.type;
+            document.getElementById('edit-borderStyle').value = card.borderStyle;
+            document.getElementById('edit-title').value = card.title;
+            document.getElementById('edit-limitTag').value = card.limitTag;
+            document.getElementById('edit-iconClass').value = card.iconClass || '';
+            document.getElementById('edit-subInfo').value = card.subInfo;
+            document.getElementById('edit-abilityBadge').value = card.abilityBadge;
+            document.getElementById('edit-abilityName').value = card.abilityName;
+            document.getElementById('edit-description').value = card.description;
+            document.getElementById('edit-duration').value = card.duration;
+            document.getElementById('edit-cardNumber').value = card.cardNumber;
+            document.getElementById('edit-flavor').value = card.flavor;
+
+            document.getElementById('editingCardTag').innerText = `編輯中: 【${card.title}】`;
+        }
+
+        function updateCurrentCardFromForm() {
+            const id = document.getElementById('edit-id').value;
+            const card = cardDataList.find(c => c.id === id);
+            if (!card) return;
+
+            card.type = document.getElementById('edit-type').value;
+            card.borderStyle = document.getElementById('edit-borderStyle').value;
+            card.title = document.getElementById('edit-title').value;
+            card.limitTag = document.getElementById('edit-limitTag').value;
+            card.iconClass = document.getElementById('edit-iconClass').value;
+            card.subInfo = document.getElementById('edit-subInfo').value;
+            card.abilityBadge = document.getElementById('edit-abilityBadge').value;
+            card.abilityName = document.getElementById('edit-abilityName').value;
+            card.description = document.getElementById('edit-description').value;
+            card.duration = document.getElementById('edit-duration').value;
+            card.cardNumber = document.getElementById('edit-cardNumber').value;
+            card.flavor = document.getElementById('edit-flavor').value;
+
+            if (card.type === 'item') {
+                card.badgeText = '道具卡 ITEM';
+                card.badgeBg = 'bg-blue-600 text-white';
+                card.abilityBadgeBg = 'bg-red-600 text-white';
+                card.bgGradient = 'bg-gradient-to-b from-blue-50 via-sky-50 to-slate-100';
+            } else {
+                card.badgeText = '限制卡 DEBUFF';
+                card.badgeBg = 'bg-purple-700 text-white';
+                card.abilityBadgeBg = 'bg-purple-800 text-white';
+                card.bgGradient = 'bg-gradient-to-b from-purple-50 via-slate-100 to-purple-100/50';
+            }
+
+            renderCards();
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const card = cardDataList.find(c => c.id === activeCardId);
+                if (card) {
+                    card.imageUrl = e.target.result;
+                    renderCards();
+                    showToast('已成功上傳圖案！');
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function addNewCard() {
+            const newId = 'custom-' + Date.now();
+            const newCard = {
+                id: newId,
+                type: 'item',
+                borderStyle: 'ptcg-border-item',
+                badgeText: '自訂卡 ITEM',
+                badgeBg: 'bg-blue-600 text-white',
+                limitTag: '自訂規則',
+                title: '全新自訂戰術',
+                iconClass: 'fa-solid fa-wand-magic-sparkles',
+                iconBg: 'from-emerald-500 via-teal-600 to-indigo-800',
+                imageUrl: '',
+                subInfo: '羽球自訂組 No.009 • 特殊戰術',
+                abilityBadge: '特性',
+                abilityBadgeBg: 'bg-red-600 text-white',
+                abilityName: '自訂技能名稱',
+                description: '請輸入您個人或球隊設計的特殊卡牌規則或效果描述...',
+                duration: '持續 1 球',
+                cardNumber: 'CUSTOM ★',
+                flavor: '「設計專屬規則，讓趣味賽更加精采！」',
+                bgGradient: 'bg-gradient-to-b from-emerald-50 via-teal-50 to-slate-100',
+            };
+
+            cardDataList.push(newCard);
+            activeCardId = newId;
+            renderCards();
+            populateEditorForm(newId);
+            showToast('已新增自訂卡牌！');
+        }
+
+        function duplicateCard() {
+            const current = cardDataList.find(c => c.id === activeCardId);
+            if (!current) return;
+
+            const newCard = JSON.parse(JSON.stringify(current));
+            newCard.id = 'copy-' + Date.now();
+            newCard.title += ' (複製)';
+            cardDataList.push(newCard);
+            activeCardId = newCard.id;
+            renderCards();
+            populateEditorForm(newCard.id);
+            showToast('已複製卡牌！');
+        }
+
+        function deleteCurrentCard() {
+            if (cardDataList.length <= 1) {
+                showToast('至少需保留一張卡牌！');
+                return;
+            }
+            cardDataList = cardDataList.filter(c => c.id !== activeCardId);
+            activeCardId = cardDataList[0].id;
+            renderCards();
+            populateEditorForm(activeCardId);
+            showToast('已刪除卡牌');
+        }
+
+        function filterCards(type) {
+            currentFilter = type;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.className = 'filter-btn px-3 py-1 text-xs rounded-lg font-medium bg-slate-700 text-slate-300 hover:bg-slate-600';
+            });
+            const activeBtn = document.getElementById(`btn-filter-${type}`);
+            if (activeBtn) {
+                activeBtn.className = 'filter-btn px-3 py-1 text-xs rounded-lg font-medium bg-amber-500 text-slate-950 font-bold';
+            }
+            renderCards();
+        }
+
+        function toggleHoloEffect() {
+            isHoloActive = !isHoloActive;
+            document.getElementById('holoToggleText').innerText = isHoloActive ? '關閉閃卡特效' : '開啟閃卡特效';
+            renderCards();
+            showToast(isHoloActive ? '閃卡光澤已開啟' : '閃卡光澤已關閉');
+        }
+
+        function triggerRandomDraw() {
+            const debuffCards = cardDataList.filter(c => c.type === 'debuff');
+            if (debuffCards.length === 0) {
+                showToast('沒有可抽取的限制卡！');
+                return;
+            }
+
+            const modal = document.getElementById('drawModal');
+            const modalContent = document.getElementById('drawModalContent');
+            const drawnContainer = document.getElementById('drawnCardContainer');
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+
+            let rolls = 0;
+            const interval = setInterval(() => {
+                const randomCard = debuffCards[Math.floor(Math.random() * debuffCards.length)];
+                drawnContainer.innerHTML = createCardHTML(randomCard);
+                rolls++;
+                if (rolls >= 10) {
+                    clearInterval(interval);
+                }
+            }, 80);
+        }
+
+        function closeDrawModal() {
+            const modal = document.getElementById('drawModal');
+            const modalContent = document.getElementById('drawModalContent');
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        async function exportCurrentCardPNG() {
+            const cardNode = document.getElementById(`card-node-${activeCardId}`);
+            if (!cardNode) return;
+
+            showToast('正在生成 1:1 精準畫質圖片...');
+
+            // Ensure fonts are fully loaded
+            if (document.fonts) {
+                await document.fonts.ready;
+            }
+
+            const card = cardDataList.find(c => c.id === activeCardId);
+            const fileName = `羽球卡牌_${card ? card.title : 'Card'}.png`;
+
+            // Primary render engine: htmlToImage (SVG foreignObject)
+            try {
+                if (window.htmlToImage) {
+                    // fontEmbedCSS: '' disables cross-origin stylesheet scanning to bypass SecurityError on CDN stylesheets
+                    const dataUrl = await htmlToImage.toPng(cardNode, {
+                        pixelRatio: 3,
+                        fontEmbedCSS: '',
+                        cacheBust: true,
+                        style: {
+                            transform: 'none',
+                            margin: '0',
+                        }
+                    });
+                    
+                    triggerDownload(dataUrl, fileName);
+                    showToast('已完成 100% 精準無位移 PNG 下載！');
+                    return;
+                }
+            } catch (err) {
+                console.warn('htmlToImage capture error, using html2canvas fallback', err);
+            }
+
+            // Fallback renderer using html2canvas
+            try {
+                const canvas = await html2canvas(cardNode, {
+                    scale: 3,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: null,
+                    logging: false,
+                    width: 330,
+                    height: 475,
+                    onclone: (clonedDoc) => {
+                        const clonedCard = clonedDoc.getElementById(`card-node-${activeCardId}`);
+                        if (clonedCard) {
+                            clonedCard.style.transform = 'none';
+                            clonedCard.classList.remove('card-holo');
+                        }
+                    }
+                });
+                const image = canvas.toDataURL("image/png");
+                triggerDownload(image, fileName);
+                showToast('已完成高畫質卡牌 PNG 下載！');
+            } catch (err) {
+                console.error(err);
+                showToast('下載失敗，請直接嘗試截圖');
+            }
+        }
+
+        function triggerDownload(dataUrl, fileName) {
+            const link = document.createElement('a');
+            link.download = fileName;
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
